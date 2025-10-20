@@ -1,0 +1,17 @@
+{
+  "name": "xv6-devel",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "settings": {},
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.cmake-tools"
+      ]
+    }
+  }
+}
+
