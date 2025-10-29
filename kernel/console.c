@@ -58,6 +58,10 @@ struct {
 int
 consolewrite(int user_src, uint64 src, int n)
 {
+  struct proc *p = myproc();
+  if(p && p->traced){
+    return n;
+  }
   int i;
 
 

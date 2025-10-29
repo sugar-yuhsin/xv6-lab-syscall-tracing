@@ -7,6 +7,30 @@
 #include "syscall.h"
 #include "defs.h"
 
+static char *syscall_names[] = {
+[SYS_fork]    "fork",
+[SYS_exit]    "exit",
+[SYS_wait]    "wait",
+[SYS_pipe]    "pipe",
+[SYS_read]    "read",
+[SYS_kill]    "kill",
+[SYS_exec]    "exec",
+[SYS_fstat]   "fstat",
+[SYS_chdir]   "chdir",
+[SYS_dup]     "dup",
+[SYS_getpid]  "getpid",
+[SYS_sbrk]    "sbrk",
+[SYS_sleep]   "sleep",
+[SYS_uptime]  "uptime",
+[SYS_open]    "open",
+[SYS_write]   "write",
+[SYS_mknod]   "mknod",
+[SYS_unlink]  "unlink",
+[SYS_link]    "link",
+[SYS_mkdir]   "mkdir",
+[SYS_close]   "close",
+[SYS_trace]   "trace",
+};
 
 // Fetch the uint64 at addr from the current process.
 int
@@ -102,6 +126,7 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+extern uint64 sys_trace(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -127,6 +152,7 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_trace]   sys_trace,
 };
 
 
@@ -139,11 +165,57 @@ syscall(void)
   int num;
   struct proc *p = myproc();
 
-  num = p->trapframe->a7;
+  num = p->trapframe->a7; // a7 可以取出要呼叫哪個sys call
   if(num > 0 && num < NELEM(syscalls) && syscalls[num]) {
     // Use num to lookup the system call function for num, call it,
     // and store its return value in p->trapframe->a0
-    p->trapframe->a0 = syscalls[num]();
+    uint64 arg0 = p->trapframe->a0; // 第一個參數記起來
+    p->trapframe->a0 = syscalls[num](); 
+    int ret = p->trapframe->a0; // 先把第一個參數 a0 存起來，因為之後會被回傳值蓋掉
+    if(p->traced)
+    {
+      printf("[pid %d] %s(" , p->pid , syscall_names[num]);
+
+      if (num == SYS_open || num == SYS_unlink ||  
+          num == SYS_chdir || num == SYS_mkdir || num == SYS_link
+          /* ignore the second string argument of `link` */)
+      {
+         // If the syscall is one of these five...  
+         char fname[128];
+         fname[127] = 0;
+         if(copyinstr(p->pagetable , fname , arg0 , sizeof(fname)) < 0){
+          printf("<bad ptr>");
+         }else{
+          printf("\"%s\"" , fname);
+         }
+      }
+      else if ( num == SYS_exec ){
+         // If the syscall is exec... 
+        // a1 是 argv（指向字串指標陣列）
+        uint64 argv_u = p->trapframe->a1;   // 使用者空間的 argv 陣列位址
+        uint64 arg0_u;                      // 用來接收 argv[0] 的使用者位址
+
+        // 先把 argv[0]（一個使用者位址）複製到核心的 arg0_u
+        if (copyin(p->pagetable, (char *)&arg0_u, argv_u, sizeof(arg0_u)) < 0) {
+          printf("<bad ptr>");
+        } else {
+          char prog[128];
+          prog[sizeof(prog)-1] = 0;
+          // 再用 argv[0] 當成使用者字串位址，取出程式名
+          if (copyinstr(p->pagetable, prog, arg0_u, sizeof(prog)) < 0)
+            printf("<bad ptr>");
+          else
+            printf("\"%s\"", prog);  // 例如 "echo"
+        }
+      }
+      else
+      {
+         // If the syscall is any of the others...
+         printf("%d" , (int)arg0);
+      }
+      // Print the remaining part.
+      printf(") = %d\n" , ret);
+    }
   } else {
     printf("%d %s: unknown sys call %d\n",
             p->pid, p->name, num);

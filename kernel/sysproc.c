@@ -92,6 +92,24 @@ sys_uptime(void)
   return xticks;
 }
 
+uint64
+sys_trace(void)
+{
+  int pid;
+
+  argint(0, &pid);
+
+  struct proc *p = find_proc_by_pid(pid);
+  if( p != 0 ){
+    acquire(&p->lock);
+    p->traced = 1;
+    release(&p->lock);
+  }else{
+    return -1;
+  }
+  return 0;
+}
+
 
 
 
